@@ -5,15 +5,16 @@ from django.contrib.auth.forms import UserCreationForm
 
 # Create your views here.
 from .models import *
+from .forms import CreateUserForm
 
 def home(request):
     return HttpResponse("Hello World!")
 
 def registerPage(request):
-    form = UserCreationForm()
+    form = CreateUserForm()
 
     if request.method == 'POST':
-        form = UserCreationForm(request.POST)
+        form = CreateUserForm(request.POST)
         if form.is_valid():
             form.save()
 
