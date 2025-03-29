@@ -1,0 +1,13 @@
+<h2>Welcome, {{ user.first_name }} {{ user.last_name }}</h2>
+
+<ul>
+  <li><strong>Username:</strong> {{ user.username }}</li>
+  <li><strong>Email:</strong> {{ user.email }}</li>
+  <li><strong>Team ID:</strong> {{ user.team_id }}</li>
+  <li><strong>Staff/Admin:</strong> {{ user.is_staff }}</li>
+</ul>
+
+<form action="{% url 'logout' %}" method="post">
+  {% csrf_token %}
+  <button type="submit">Logout</button>
+</form>

@@ -1,1 +1,21 @@
-<h3>Login</h3>
+<h2>Login</h2>
+
+{% if messages %}
+  {% for message in messages %}
+    <p style="color: green;">{{ message }}</p>
+  {% endfor %}
+{% endif %}
+
+<form method="POST">
+  {% csrf_token %}
+  <label>Username or Email:</label>
+  <input type="text" name="identifier"><br><br>
+
+  <label>Password:</label>
+  <input type="password" name="password"><br><br>
+
+  <label>Team ID (only for non-admins):</label>
+  <input type="text" name="team_id"><br><br>
+
+  <button type="submit">Login</button>
+</form>
