@@ -1,10 +1,11 @@
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.views import PasswordResetConfirmView
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth import get_user_model
 from django.contrib import messages
 from django.shortcuts import render, redirect
-from django.http import HttpResponse
+from django.urls import reverse_lazy
 from django.forms import inlineformset_factory
 
 from .models import *
@@ -15,7 +16,64 @@ User = get_user_model()
 # home page
 @login_required
 def home(request):
-    return HttpResponse("Hello World!")
+    user = request.user
+
+    if user.is_superuser and 'toggle_view' in request.GET:
+        if request.session.get('admin_view', False):
+            request.session.pop('admin_view', None)
+        else:
+            request.session['admin_view'] = True
+        return redirect('home')  # Clean redirect with no query string
+
+    # Determine team_id based on session + user
+    admin_view = request.session.get('admin_view', False)
+    if user.is_superuser and admin_view and 'team_id' in request.GET:
+        team_id = request.GET.get('team_id').lower()
+    else:
+        team_id = user.team_id.lower() if user.team_id else "default"
+
+    team_config = {
+        "1921": {
+            "team_name": "SDSU Basketball",
+            "heading_color": "red",
+            "dashboard_title": "Aztecs Dashboard",
+            "data": ["Stat A", "Stat B", "Stat C"]
+        },
+        "8472": {
+            "team_name": "Warriors Blue",
+            "heading_color": "blue",
+            "dashboard_title": "Team 8472 Dashboard",
+            "data": ["Metric X", "Metric Y"]
+        },
+        "default": {
+            "team_name": "Default",
+            "heading_color": "gray",
+            "dashboard_title": "Your Dashboard",
+            "data": ["Welcome to the system."]
+        },
+    }
+
+    team_settings = team_config.get(team_id, team_config["default"])
+
+    context = {
+        'user': user,
+        'dashboard_title': team_settings['dashboard_title'],
+        'heading_color': team_settings['heading_color'],
+        'admin_view': admin_view,
+        'team_id': team_id,
+        'team_name': team_settings['team_name'],
+        'team_data': team_settings['data'],
+        'admin_view': request.session.get('admin_view', False),
+    }
+    
+    if user.is_superuser:
+        context["available_teams"] = [
+            {"id": "1921", "name": "SDSU Basketball"},
+            {"id": "8472", "name": "Warriors Blue"},
+        ]
+
+
+    return render(request, 'accounts/home.html', context)
 
 # login page
 def loginPage(request):
@@ -38,7 +96,7 @@ def loginPage(request):
         
         if user:
             # check team ID
-            if not user.is_staff and str(user.team_id).stip() != str(team_id_input).strip():
+            if not user.is_staff and str(user.team_id).strip() != str(team_id_input).strip():
                 messages.error(request, "Team ID is incorrect")
                 return render(request, 'accounts/login.html')
             
@@ -65,3 +123,11 @@ def logoutUser(request):
     messages.success(request, "Successfully logged out.")
     logout(request)
     return redirect('login')
+
+class CustomPasswordResetConfirm(PasswordResetConfirmView):
+    template_name = 'accounts/password_reset_confirm.html'
+    success_url = reverse_lazy('login')
+
+    def form_valid(self, form):
+        messages.success(self.request, "Your password has been set successfully. Please log in")
+        return super().form_valid(form)

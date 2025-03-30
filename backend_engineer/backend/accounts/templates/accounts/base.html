@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}Scouting Dashboard{% endblock %}</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: sans-serif;
+            position: relative;
+        }
+
+        .site-header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background-color: #222;
+            color: white;
+            z-index: 1200;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            display: flex;
+            align-items: center;
+        }
+        
+        .header-content {
+            display: flex;
+            align-items: center;
+            width: 100%;
+            justify-content: space-between;
+            padding: 0 1.5rem;
+        }
+        
+        .header-left {
+            display: flex;
+            align-items: center;
+        }
+        
+        .toggle-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            margin-right: 1rem;
+            cursor: pointer;
+        }
+        
+        .site-title {
+            margin: 0;
+            font-size: 1.2rem;
+        }
+        
+        .user-info {
+            font-size: 0.9rem;
+            color: #ccc;
+        }
+
+        .sidebar {
+            position: fixed;
+            top: 60px;
+            left: 0;
+            width: 250px;
+            height: 100vh;
+            background: #f4f4f4;
+            padding: 1rem;
+            box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+            transform: translateX(0);
+            transition: transform 0.3s ease;
+            z-index: 1000;
+        }
+
+        .sidebar.collapsed {
+            transform: translateX(-100%);
+        }
+
+        .sidebar h2,
+        .sidebar ul {
+            opacity: 1;
+            transition: opacity 0.2s ease;
+        }
+
+        .sidebar.collapsed h2,
+        .sidebar.collapsed ul {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        main {
+            padding: 80px 2rem 2rem 2rem;
+        }
+    </style>  
+</head>
+<body>
+    <header class="site-header">
+        <div class="header-content">
+        <!-- icon and title -->
+        <div class="header-left">
+            <button class="toggle-btn" onclick="toggleSidebar()">☰</button>
+            <h1 class="site-title">Aztec Scouting Dashboard</h1>
+        </div>
+    
+        <!-- right user -->
+        <span class="user-info">{{ user.username }}</span>
+        </div>
+    </header>
+    
+    <!-- Sidebar -->
+    <div class="sidebar collapsed" id="sidebar">
+        <h2>Navigation</h2>
+        <ul>
+            <li><a href="{% url 'home' %}">Home</a></li>
+            <li><a href="{% url 'profile' %}">Profile</a></li>
+
+            {% if user.is_staff or user.is_superuser %}
+                <li><a href="/admin/">Admin</a></li>
+            {% endif %}
+
+            <li><a href="{% url 'logout' %}">Logout</a></li>
+        </ul>
+    </div>
+
+    <!-- Main content -->
+    <main>
+        {% block content %}
+        {% endblock %}
+    </main>
+
+    <!-- JS -->
+    <script>
+        function toggleSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        sidebar.classList.toggle('collapsed');
+        }
+
+        // prevent sidebar flash on page load
+        window.addEventListener('DOMContentLoaded', () => {
+        const sidebar = document.getElementById('sidebar');
+        sidebar.classList.add('collapsed');
+        });
+    </script>
+
+</body>
+</html>

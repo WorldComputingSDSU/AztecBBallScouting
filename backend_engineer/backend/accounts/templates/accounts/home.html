@@ -1,0 +1,63 @@
+{% extends 'accounts/base.html' %}
+
+{% block title %}{{ dashboard_title }}{% endblock %}
+
+{% block content %}
+  <h2 style="color: {{ heading_color }}">{{ dashboard_title }}</h2>
+  <p>Logged in as {{ user.username }} (Team: {{ team_id }})</p>
+
+  {% if user.is_superuser and admin_view %}
+    <form method="get" action="{% url 'home' %}" style="margin-top: 1rem;">
+      <label for="teamSelect">View team as:</label>
+      <select name="team_id" id="teamSelect">
+        {% for team in available_teams %}
+          <option value="{{ team.id }}" {% if team.id == team_id %}selected{% endif %}>
+            {{ team.name }}
+          </option>
+        {% endfor %}
+      </select>
+      <button type="submit">Go</button>
+    </form>
+  {% endif %}
+
+  <!-- IMPLEMENT READ DATA -->
+  <h3>Team Data:</h3>
+  <ul>
+    {% for item in team_data %}
+      <li>{{ item }}</li>
+    {% endfor %}
+  </ul>
+
+  <h3 style="margin-top: 2rem;">Your Info:</h3>
+  <ul>
+    <li><strong>Username:</strong> {{ user.username }}</li>
+    <li><strong>Email:</strong> {{ user.email }}</li>
+    <li><strong>First Name:</strong> {{ user.first_name }}</li>
+    <li><strong>Last Name:</strong> {{ user.last_name }}</li>
+    <li><strong>Team ID:</strong> {{ user.team_id }}</li>
+    <li><strong>Admin:</strong> {{ user.is_staff }}</li>
+  </ul>
+
+  <a href="{% url 'logout' %}">Logout</a>
+
+  {% if user.is_superuser %}
+    <form method="get" action="{% url 'home' %}" style="position: fixed; bottom: 20px; right: 20px;">
+      <input type="hidden" name="toggle_view" value="true">
+      <button type="submit" style="
+        background-color: #222;
+        color: white;
+        padding: 10px 15px;
+        border: none;
+        border-radius: 6px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+        cursor: pointer;
+      ">
+        {% if admin_view %}
+          Exit Team View
+        {% else %}
+          Enter Team View
+        {% endif %}
+      </button>
+    </form>
+  {% endif %}
+{% endblock %}
