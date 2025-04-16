@@ -1,0 +1,49 @@
+/* Header Styles */
+.header {
+  background: linear-gradient(90deg, #000000, #cc1f1f);
+  color: white;
+  padding: 1rem 2rem;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  transition: background 0.3s ease; 
+}
+
+
+
+.header-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.logo {
+  height: 150px;       /* Adjust size */
+  margin-right: 1rem; /* spacing */
+}
+
+.nav-links {
+  list-style: none;
+  display: flex;
+  gap: 1rem;
+}
+
+.nav-links li {
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.nav-links li:hover {
+  transform: scale(1.1);
+}
+
+/* Header w Nav */
+@media (max-width: 768px) {
+  .header-container {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .nav-links {
+    padding: 0.5rem 0;
+  }
+}
+

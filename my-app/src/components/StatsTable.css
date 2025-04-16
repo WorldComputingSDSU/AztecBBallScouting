@@ -1,0 +1,39 @@
+/* StatsTable.css */
+.stats-table-wrapper {
+    margin: 1rem auto;
+    width: 90%;
+    max-width: 900px;
+    overflow-x: auto;
+  }
+  
+  .stats-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: center;
+    font-family: "Arial", sans-serif;
+  }
+  
+  .stats-table thead {
+    background: linear-gradient(45deg, #5a0909, #5a0909);
+    color: #fff;
+  }
+  
+  .stats-table th,
+  .stats-table td {
+    border: 1px solid #ccc;
+    padding: 0.75rem;
+  }
+  
+  .player-name .number {
+    font-weight: bold;
+    font-size: 1.2rem;
+    color: #333;
+  }
+  
+  .player-shooting .pct {
+    margin-top: 4px;
+    font-size: 0.9rem;
+    color: #e53935; /* Adjust color */
+  }
+  
+  

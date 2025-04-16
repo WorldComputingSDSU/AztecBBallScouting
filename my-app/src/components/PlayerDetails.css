@@ -1,0 +1,23 @@
+
+.player-details {
+  max-width: 600px;
+  margin: 2rem auto;
+  padding: 2rem;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  font-family: 'Helvetica Neue', sans-serif;
+}
+
+.player-details a {
+  text-decoration: none;
+  color: #007acc;
+  font-weight: bold;
+}
+
+.player-details hr {
+  margin: 1rem 0;
+}
+
+  
