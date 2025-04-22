@@ -1,0 +1,7 @@
+uvicorn app.main:app --reload
+open index.html
+
+python3 -m venv venv
+source venv/bin/activate
+pip install fastapi uvicorn beautifulsoup4 requests
+uvicorn app.main:app --reload

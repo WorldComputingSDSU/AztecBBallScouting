@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Player Stats Lookup</title>
+  <style>
+    body { font-family: sans-serif; padding: 2rem; }
+    input { padding: 0.5rem; font-size: 1rem; }
+    button { padding: 0.5rem 1rem; font-size: 1rem; margin-left: 0.5rem; }
+    pre { background: #f5f5f5; padding: 1rem; border-radius: 5px; }
+    .form-group { margin-bottom: 1rem; }
+    select { padding: 0.5rem; font-size: 1rem; }
+  </style>
+</head>
+<body>
+
+  <h1>College Basketball Player Stats</h1>
+  
+  <div class="form-group">
+    <input type="text" id="playerInput" placeholder="Enter player name (e.g., Zach Edey)" />
+  </div>
+  
+  <div class="form-group">
+    <select id="seasonSelect">
+      <option value="">Career Stats</option>
+      <option value="2025">2024-25</option>
+      <option value="2024">2023-24</option>
+      <option value="2023">2022-23</option>
+      <option value="2022">2021-22</option>
+      <option value="2021">2020-21</option>
+    </select>
+  </div>
+
+  <button onclick="getPlayerStats()">Search</button>
+
+  <h2>Results:</h2>
+  <pre id="results">No data yet...</pre>
+
+  <script>
+    async function getPlayerStats() {
+      const player = document.getElementById('playerInput').value;
+      const season = document.getElementById('seasonSelect').value;
+      const results = document.getElementById('results');
+      
+      if (!player.trim()) {
+        results.textContent = 'Please enter a player name';
+        return;
+      }
+
+      try {
+        let url;
+        if (season) {
+          url = `http://127.0.0.1:8000/players/${encodeURIComponent(player)}/season/${season}`;
+        } else {
+          url = `http://127.0.0.1:8000/player-stats/?player=${encodeURIComponent(player)}`;
+        }
+
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+
+        if (season) {
+          results.textContent = `Player: ${player}\nSeason: ${season-1}-${season}\n\n` +
+            Object.entries(data)
+              .filter(([_, value]) => value !== null)
+              .map(([key, value]) => `${key}: ${value}`)
+              .join('\n');
+        } else {
+          if (data.stats) {
+            const stats = data.stats;
+            results.textContent = `Player: ${data.player}\n` +
+                                `Points Per Game: ${stats["PTS"]}\n` +
+                                `Assists Per Game: ${stats["AST"]}\n` +
+                                `Rebounds Per Game: ${stats["REB"]}\n` +
+                                `Field Goal %: ${stats["FG%"]}\n` +
+                                `3-Point %: ${stats["3P%"]}\n` +
+                                `Total Points: ${stats["Total Points"]}`;
+          }
+        }
+      } catch (error) {
+        results.textContent = `Error: Could not find stats for ${player} in the ${season-1}-${season} Season.`;
+      }
+    }
+  </script>
+</body>
+</html>
