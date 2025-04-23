@@ -1,8 +1,28 @@
+import json
 import requests
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Comment
 import re
 import logging
-from bs4 import Comment
+from fastapi import APIRouter
+from datetime import datetime
+
+# Create router instance
+router = APIRouter()
+
+# Define the router endpoint
+@router.get("/nba/schedule/{team_slug}")
+async def get_team_schedule(team_slug: str):
+    """Scrape the NBA team schedule from ESPN."""
+    return scrape_team_schedule(team_slug)
+
+headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
+}
+
 
 def format_player_name(name):
     if re.fullmatch(r"[a-z\-]+-\d+", name.lower()):
@@ -10,37 +30,6 @@ def format_player_name(name):
     parts = name.lower().split()
     return '-'.join(parts) + "-1"
 
-def scrape_player_data(player):
-    player_slug = format_player_name(player)
-    url = f"https://www.sports-reference.com/cbb/players/{player_slug}.html"
-    response = requests.get(url)
-
-    if response.status_code != 200:
-        return {"error": f"Could not find player page for {player}"}
-
-    soup = BeautifulSoup(response.text, "html.parser")
-    stats_table = soup.find("table", {"id": "players_per_game"})
-
-    if not stats_table:
-        return {"error": f"No stats table found for {player}"}
-
-    last_row = stats_table.find("tfoot").find("tr")
-
-    stat_fields = {
-        "PTS": "pts_per_g",
-        "AST": "ast_per_g",
-        "REB": "trb_per_g",
-        "FG%": "fg_pct",
-        "3P%": "fg3_pct",
-        "Total Points": "pts"
-    }
-
-    stats = {}
-    for label, key in stat_fields.items():
-        cell = last_row.find("td", {"data-stat": key})
-        stats[label] = cell.text if cell else "N/A"
-
-    return stats
 
 def scrape_season_stats(player: str, season: str) -> dict:
     """Scrape stats for a given NCAA player and a specific season (e.g., '2023' for 2022–23)."""
@@ -127,6 +116,19 @@ def scrape_season_stats(player: str, season: str) -> dict:
     logger.info(f"Scraped {season} stats for {player}: {results}")
     return results
 
+
+
+
+
+
+
+
+
+
+
+
+
+
 def test_scrape(player):
     logger = logging.getLogger("uvicorn.error")
     player_slug = format_player_name(player)
@@ -193,3 +195,175 @@ def test_scrape(player):
 
     logger.info(f"SCRAPED STATS: {results}")
     return results
+
+
+
+
+
+
+
+
+
+
+def parse_game_date(date_str: str) -> str:
+    """Convert date string to YYYY-MM-DD format."""
+    if date_str == "DATE" or not date_str:
+        return None
+    try:
+        # Add current year since the input only has month and day
+        current_year = datetime.now().year
+        date_obj = datetime.strptime(f"{date_str} {current_year}", "%a, %b %d %Y")
+        # Adjust year if the date is in the future (meaning it's from last year)
+        if date_obj > datetime.now():
+            date_obj = date_obj.replace(year=current_year - 1)
+        return date_obj.strftime("%Y-%m-%d")
+    except ValueError:
+        return None
+
+def clean_game_result(result: str) -> dict:
+    """Parse game result into structured format."""
+    if not result or result == "RESULT":
+        return None
+    
+    result_data = {
+        "result": None,
+        "score": None,
+        "home_score": None,
+        "away_score": None,
+        "overtime": False
+    }
+    
+    if result.startswith('W'):
+        result_data["result"] = "Win"
+        scores = result[1:].split('-')
+    elif result.startswith('L'):
+        result_data["result"] = "Loss"
+        scores = result[1:].split('-')
+    else:
+        return result_data
+    
+    if len(scores) == 2:
+        # Check for overtime
+        if 'OT' in scores[1]:
+            result_data["overtime"] = True
+            scores[1] = scores[1].replace(' OT', '')
+            
+        try:
+            result_data["home_score"] = int(scores[0])
+            result_data["away_score"] = int(scores[1])
+            result_data["score"] = f"{scores[0]}-{scores[1]}"
+        except ValueError:
+            # If score parsing fails, keep the original score string
+            result_data["score"] = f"{scores[0]}-{scores[1]}"
+    
+    return result_data
+
+def clean_schedule_data(raw_schedule: list) -> list:
+    """Clean and structure raw schedule data."""
+    cleaned = []
+    
+    for game in raw_schedule:
+        # Skip header row
+        if game["date"] == "DATE":
+            continue
+            
+        clean_game = {
+            "date": parse_game_date(game["date"]),
+            "opponent": game["opponent"],
+            "record": game["record"]
+        }
+        
+        # Add parsed result data
+        result_data = clean_game_result(game["result"])
+        if result_data:
+            clean_game.update(result_data)
+            
+        cleaned.append(clean_game)
+    
+    return cleaned
+
+def get_team_seasons(team_slug: str) -> int:
+    """Get the number of seasons played by the team."""
+    url = f"https://www.espn.com/nba/team/stats/_/name/{team_slug}"
+    response = requests.get(url, headers=headers)
+    
+    if response.status_code != 200:
+        return None
+
+    soup = BeautifulSoup(response.text, "html.parser")
+    
+    # Look for team history in multiple possible locations
+    possible_containers = [
+        soup.find("div", class_="ClubhouseHeader__Team"),
+        soup.find("section", class_="TeamHeader"),
+        soup.find("div", class_="TeamInfo")
+    ]
+    
+    for container in possible_containers:
+        if not container:
+            continue
+            
+        # Try different text patterns
+        patterns = [
+            r"(\d+)[a-z\s]*season",  # matches "74th season" or "74 seasons"
+            r"established[^\d]*(\d{4})",  # matches "established in 1947"
+            r"est\.[^\d]*(\d{4})"  # matches "est. 1947"
+        ]
+        
+        text = container.get_text().lower()
+        
+        for pattern in patterns:
+            match = re.search(pattern, text)
+            if match:
+                if len(match.group(1)) == 4:  # If we found a year
+                    current_year = datetime.now().year
+                    return current_year - int(match.group(1))
+                else:  # If we found direct seasons count
+                    return int(match.group(1))
+    
+    # If we couldn't find the information
+    return None
+
+def scrape_team_schedule(team_slug: str):
+    """Scrape the NBA team schedule from ESPN."""
+    url = f"https://www.espn.com/nba/team/schedule/_/name/{team_slug}/seasontype/2"
+    
+    # Get seasons count first
+    seasons_count = get_team_seasons(team_slug)
+    
+    # Make the GET request with headers
+    response = requests.get(url, headers=headers)
+
+    if response.status_code != 200:
+        print("Failed to fetch schedule")
+        return {"error": "Failed to fetch schedule"}
+
+    # Parse the response HTML using BeautifulSoup
+    soup = BeautifulSoup(response.text, "html.parser")
+    schedule_table = soup.find("table")
+
+    if not schedule_table:
+        print(" Schedule table not found")
+        return {"error": "Schedule table not found"}
+
+    schedule = []
+    for row in schedule_table.find_all("tr")[1:]:  # Skip header row
+        cells = row.find_all("td")
+        if len(cells) < 4:
+            continue
+
+        game = {
+            "date": cells[0].text.strip(),
+            "opponent": cells[1].text.strip(),
+            "result": cells[2].text.strip(),
+            "record": cells[3].text.strip()
+        }
+        schedule.append(game)
+
+    # Clean and format the schedule data
+    cleaned_schedule = clean_schedule_data(schedule)
+    return {
+        "team": team_slug.upper(),
+        "seasons_played": seasons_count,
+        "schedule": cleaned_schedule
+    }

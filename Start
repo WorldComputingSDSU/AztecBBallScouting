@@ -5,3 +5,6 @@ python3 -m venv venv
 source venv/bin/activate
 pip install fastapi uvicorn beautifulsoup4 requests
 uvicorn app.main:app --reload
+
+
+http://127.0.0.1:8000/nba/schedule/lal

@@ -1,6 +1,6 @@
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, Query
-from app.scraper import scrape_player_data, test_scrape, scrape_season_stats
+from app.scraper import test_scrape, scrape_season_stats, scrape_team_schedule, router
 from app.schema import PlayerStats
 
 
@@ -35,3 +35,11 @@ def get_player_stats(name: str):
 def get_season_stats(name: str, year: str):
     raw_stats = scrape_season_stats(name, year)
     return PlayerStats(**raw_stats)
+
+
+@app.get("/team-schedule/")
+def get_team_schedule(team: str = Query("lal", description="NBA team slug, e.g., 'lal' for Lakers")):
+    return scrape_team_schedule(team)
+
+# Include the router
+app.include_router(router)
