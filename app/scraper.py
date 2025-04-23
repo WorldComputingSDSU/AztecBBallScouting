@@ -15,6 +15,12 @@ async def get_team_schedule(team_slug: str):
     """Scrape the NBA team schedule from ESPN."""
     return scrape_team_schedule(team_slug)
 
+# Add new router endpoint near the top with other routes
+@router.get("/nba/game/{game_id}")
+async def get_game_box_score(game_id: str):
+    """Get box score for a specific NBA game."""
+    return scrape_game_box_score(game_id)
+
 headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36",
     "Accept-Language": "en-US,en;q=0.9",
@@ -270,7 +276,9 @@ def clean_schedule_data(raw_schedule: list) -> list:
         clean_game = {
             "date": parse_game_date(game["date"]),
             "opponent": game["opponent"],
-            "record": game["record"]
+            "record": game["record"],
+            "game_id": game.get("game_id"),
+            "game_url": game.get("game_url")
         }
         
         # Add parsed result data
@@ -352,11 +360,25 @@ def scrape_team_schedule(team_slug: str):
         if len(cells) < 4:
             continue
 
+        # Find game link in the result cell (usually cell index 2)
+        game_link = cells[2].find('a')
+        game_url = None
+        game_id = None
+        
+        if game_link and 'href' in game_link.attrs:
+            game_url = game_link['href']
+            # Extract game ID from URL using regex
+            id_match = re.search(r'/gameId/(\d+)/', game_url)
+            if id_match:
+                game_id = id_match.group(1)
+
         game = {
             "date": cells[0].text.strip(),
             "opponent": cells[1].text.strip(),
             "result": cells[2].text.strip(),
-            "record": cells[3].text.strip()
+            "record": cells[3].text.strip(),
+            "game_id": game_id,
+            "game_url": game_url
         }
         schedule.append(game)
 
@@ -367,3 +389,33 @@ def scrape_team_schedule(team_slug: str):
         "seasons_played": seasons_count,
         "schedule": cleaned_schedule
     }
+
+def scrape_game_box_score(game_id: str) -> dict:
+    """Scrape box score data for a specific NBA game."""
+    logger = logging.getLogger("uvicorn.error")
+    
+    # First get the game page
+    game_url = f"https://www.espn.com/nba/game/_/gameId/{game_id}"
+    logger.info(f"Fetching game page from: {game_url}")
+    
+    response = requests.get(game_url, headers=headers)
+    if response.status_code != 200:
+        logger.error(f"Failed to fetch game page: {response.status_code}")
+        return {"error": "Failed to fetch game page"}
+
+    soup = BeautifulSoup(response.text, "html.parser")
+    
+    # Find team names from the game header
+    team_names = []
+    team_headers = soup.find_all("div", {"class": "GameHero_TeamInfo"})  # Fixed string literal
+    for team in team_headers:
+        name_element = team.find("div", {"class": "GameHero_TeamName"})
+        if name_element:
+            team_names.append(name_element.text.strip())
+    logger.info(f"Found team names: {team_names}")
+
+    # Get box score URL
+    box_score_url = f"https://www.espn.com/nba/boxscore/_/gameId/{game_id}"
+    logger.info(f"Fetching box score from: {box_score_url}")
+
+    # ...rest of existing function...

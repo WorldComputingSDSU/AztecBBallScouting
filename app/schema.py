@@ -52,3 +52,39 @@ class PlayerStats(BaseModel):
     class Config:
         extra = "ignore"
         allow_population_by_field_name = True
+
+class PlayerBoxScore(BaseModel):
+    name: str
+    minutes: str
+    fg: str
+    threept: str
+    ft: str
+    oreb: str
+    dreb: str
+    reb: str
+    ast: str
+    stl: str
+    blk: str
+    to: str
+    pf: str
+    pts: str
+
+class TeamTotals(BaseModel):
+    minutes: str
+    fg: str
+    threept: str
+    ft: str
+    oreb: str
+    dreb: str
+    reb: str
+    ast: str
+    stl: str
+    blk: str
+    to: str
+    pf: str
+    pts: str
+
+class BoxScore(BaseModel):
+    game_id: str
+    teams: dict[str, list[PlayerBoxScore]]
+    team_stats: dict[str, TeamTotals]

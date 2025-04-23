@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>NBA Team Data</title>
+    <style>
+        .box-score {
+            margin: 20px;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .team-section {
+            margin-bottom: 30px;
+        }
+
+        .team-name {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+
+        .stats-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        .stats-table th, .stats-table td {
+            padding: 8px;
+            text-align: center;
+            border: 1px solid #ddd;
+        }
+
+        .stats-table th {
+            background-color: #f4f4f4;
+            font-weight: bold;
+        }
+
+        .stats-table tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        .team-totals {
+            font-weight: bold;
+            background-color: #f0f0f0 !important;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .schedule-container {
+            margin: 20px;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .game-row {
+            display: flex;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+        }
+
+        .game-row:hover {
+            background-color: #f5f5f5;
+        }
+
+        .game-date {
+            width: 120px;
+            font-weight: bold;
+        }
+
+        .game-opponent {
+            width: 200px;
+        }
+
+        .game-result {
+            width: 100px;
+            font-weight: bold;
+        }
+
+        .game-record {
+            width: 100px;
+        }
+
+        .win {
+            color: green;
+        }
+
+        .loss {
+            color: red;
+        }
+
+        .selected-game {
+            background-color: #e8f4ff;
+        }
+
+        #scheduleContent {
+            margin-bottom: 30px;
+        }
+
+        .section-title {
+            font-size: 24px;
+            margin: 20px;
+            color: #333;
+        }
+
+        .header-container {
+            margin: 20px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .team-selector {
+            padding: 8px;
+            font-size: 16px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+
+        .team-title {
+            font-size: 28px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        .box-score-container {
+            margin-top: 40px;
+            padding: 20px;
+            border-top: 2px solid #ddd;
+        }
+
+        .box-score-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .back-to-schedule {
+            background-color: #f4f4f4;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            color: #333;
+        }
+
+        .back-to-schedule:hover {
+            background-color: #e4e4e4;
+        }
+    </style>
+</head>
+<body>
+    <div class="header-container">
+        <select id="teamSelector" class="team-selector" onchange="handleTeamChange(event)">
+            <option value="lal">Los Angeles Lakers</option>
+            <option value="bos">Boston Celtics</option>
+            <option value="gsw">Golden State Warriors</option>
+            <option value="mil">Milwaukee Bucks</option>
+            <option value="mia">Miami Heat</option>
+            <option value="den">Denver Nuggets</option>
+        </select>
+        <div class="team-title">
+            <span id="selectedTeamName">Los Angeles Lakers</span> Schedule
+        </div>
+    </div>
+    <div id="scheduleContent" class="schedule-container"></div>
+    <div id="boxScore" class="box-score hidden">
+        <div class="box-score-header">
+            <h2>Game Box Score</h2>
+            <a href="#scheduleContent" class="back-to-schedule">Back to Schedule</a>
+        </div>
+        <div id="boxScoreContent"></div>
+    </div>
+
+    <script>
+        // Add API base URL
+        const API_BASE_URL = 'http://localhost:8000';
+
+        async function loadTeamSchedule(team = 'lal') {
+            try {
+                const response = await fetch(`${API_BASE_URL}/nba/schedule/${team}`);
+                const data = await response.json();
+                console.log('Schedule data:', data);
+                displaySchedule(data.schedule);
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        function displaySchedule(schedule) {
+            const container = document.getElementById('scheduleContent');
+            container.innerHTML = '';
+
+            schedule.forEach(game => {
+                const gameRow = document.createElement('div');
+                gameRow.className = 'game-row';
+                
+                const resultClass = game.result === 'Win' ? 'win' : 'loss';
+                
+                gameRow.innerHTML = `
+                    <div class="game-date">${game.date || 'TBD'}</div>
+                    <div class="game-opponent">${game.opponent}</div>
+                    <div class="game-result ${resultClass}">${game.score || 'TBD'}</div>
+                    <div class="game-record">${game.record || ''}</div>
+                `;
+
+                if (game.game_id) {
+                    gameRow.onclick = () => {
+                        // Remove selected class from all rows
+                        document.querySelectorAll('.game-row').forEach(row => {
+                            row.classList.remove('selected-game');
+                        });
+                        // Add selected class to clicked row
+                        gameRow.classList.add('selected-game');
+                        showBoxScore(game.game_id);
+                    };
+                }
+
+                container.appendChild(gameRow);
+            });
+        }
+
+        async function showBoxScore(gameId) {
+            try {
+                const response = await fetch(`${API_BASE_URL}/nba/game/${gameId}`);
+                const data = await response.json();
+                
+                const boxScoreDiv = document.getElementById('boxScore');
+                const content = document.getElementById('boxScoreContent');
+                content.innerHTML = '';
+
+                // Create box score tables for each team
+                Object.entries(data.teams).forEach(([teamName, players]) => {
+                    const teamSection = document.createElement('div');
+                    teamSection.className = 'team-section';
+                    
+                    const teamTitle = document.createElement('div');
+                    teamTitle.className = 'team-name';
+                    teamTitle.textContent = teamName;
+                    
+                    const table = document.createElement('table');
+                    table.className = 'stats-table';
+                    
+                    // Add header
+                    table.innerHTML = `
+                        <thead>
+                            <tr>
+                                <th>Player</th>
+                                <th>MIN</th>
+                                <th>FG</th>
+                                <th>3PT</th>
+                                <th>FT</th>
+                                <th>OREB</th>
+                                <th>DREB</th>
+                                <th>REB</th>
+                                <th>AST</th>
+                                <th>STL</th>
+                                <th>BLK</th>
+                                <th>TO</th>
+                                <th>PF</th>
+                                <th>PTS</th>
+                            </tr>
+                        </thead>
+                    `;
+
+                    // Add player rows
+                    const tbody = document.createElement('tbody');
+                    players.forEach(player => {
+                        tbody.innerHTML += `
+                            <tr>
+                                <td>${player.name}</td>
+                                <td>${player.minutes}</td>
+                                <td>${player.fg}</td>
+                                <td>${player.threept}</td>
+                                <td>${player.ft}</td>
+                                <td>${player.oreb}</td>
+                                <td>${player.dreb}</td>
+                                <td>${player.reb}</td>
+                                <td>${player.ast}</td>
+                                <td>${player.stl}</td>
+                                <td>${player.blk}</td>
+                                <td>${player.to}</td>
+                                <td>${player.pf}</td>
+                                <td>${player.pts}</td>
+                            </tr>
+                        `;
+                    });
+
+                    // Add team totals
+                    const totals = data.team_stats[teamName];
+                    tbody.innerHTML += `
+                        <tr class="team-totals">
+                            <td>Team Totals</td>
+                            <td>${totals.minutes}</td>
+                            <td>${totals.fg}</td>
+                            <td>${totals.threept}</td>
+                            <td>${totals.ft}</td>
+                            <td>${totals.oreb}</td>
+                            <td>${totals.dreb}</td>
+                            <td>${totals.reb}</td>
+                            <td>${totals.ast}</td>
+                            <td>${totals.stl}</td>
+                            <td>${totals.blk}</td>
+                            <td>${totals.to}</td>
+                            <td>${totals.pf}</td>
+                            <td>${totals.pts}</td>
+                        </tr>
+                    `;
+
+                    table.appendChild(tbody);
+                    teamSection.appendChild(teamTitle);
+                    teamSection.appendChild(table);
+                    content.appendChild(teamSection);
+                });
+
+                boxScoreDiv.classList.remove('hidden');
+                
+                // Scroll to box score
+                boxScoreDiv.scrollIntoView({ behavior: 'smooth' });
+                
+            } catch (error) {
+                console.error('Error loading box score:', error);
+            }
+        }
+
+        function handleTeamChange(event) {
+            const teamSelect = event.target;
+            const selectedTeamName = teamSelect.options[teamSelect.selectedIndex].text;
+            document.getElementById('selectedTeamName').textContent = selectedTeamName;
+            loadTeamSchedule(teamSelect.value);
+            // Hide box score and scroll to top when changing teams
+            document.getElementById('boxScore').classList.add('hidden');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadTeamSchedule();
+        });
+    </script>
+</body>
+</html>
