@@ -1,21 +1,43 @@
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, HTTPException
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.encoders import jsonable_encoder
 from app.scraper import test_scrape, scrape_season_stats, scrape_team_schedule, router
 from app.schema import PlayerStats
 
 
 app = FastAPI()
 
+# Update CORS middleware configuration with explicit origins
+origins = [
+    "http://localhost:5500",
+    "http://127.0.0.1:5500",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "http://localhost",
+    "http://127.0.0.1"
+]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific origins
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"]
 )
+
+# Add error handling middleware
+@app.middleware("http")
+async def catch_exceptions_middleware(request, call_next):
+    try:
+        return await call_next(request)
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
 
 # Mount the project directory for static files
 app.mount("/static", StaticFiles(directory="."), name="static")

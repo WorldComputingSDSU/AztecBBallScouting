@@ -1,4 +1,8 @@
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload - for the fast api
+python3 -m http.server 5500 - for the static server
+
+Access app through http://localhost:5500/teamdata.html
+
 open index.html
 
 python3 -m venv venv

@@ -185,17 +185,33 @@
     </div>
 
     <script>
-        // Add API base URL
-        const API_BASE_URL = 'http://localhost:8000';
+        // Update API base URL and fetch configuration
+        const API_BASE_URL = 'http://127.0.0.1:8000';
+        
+        const fetchConfig = {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            },
+            mode: 'cors',
+            credentials: 'include'
+        };
 
         async function loadTeamSchedule(team = 'lal') {
             try {
-                const response = await fetch(`${API_BASE_URL}/nba/schedule/${team}`);
+                const response = await fetch(`${API_BASE_URL}/nba/schedule/${team}`, fetchConfig);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
                 const data = await response.json();
-                console.log('Schedule data:', data);
                 displaySchedule(data.schedule);
             } catch (error) {
                 console.error('Error:', error);
+                const container = document.getElementById('scheduleContent');
+                container.innerHTML = `<div class="error">Failed to load schedule: ${error.message}</div>`;
             }
         }
 
@@ -234,15 +250,36 @@
 
         async function showBoxScore(gameId) {
             try {
-                const response = await fetch(`${API_BASE_URL}/nba/game/${gameId}`);
+                const response = await fetch(`${API_BASE_URL}/nba/game/${gameId}`, {
+                    ...fetchConfig,
+                    credentials: 'same-origin'
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                    throw new Error(errorData.detail || errorData.error || `HTTP error! status: ${response.status}`);
+                }
+                
                 const data = await response.json();
+                if (!data || !data.teams) {
+                    throw new Error('No game data available');
+                }
                 
                 const boxScoreDiv = document.getElementById('boxScore');
                 const content = document.getElementById('boxScoreContent');
                 content.innerHTML = '';
 
+                // Display game score header
+                if (data.game) {
+                    content.innerHTML += `
+                        <div class="game-header" style="text-align: center; margin-bottom: 20px; font-size: 1.2em;">
+                            ${data.game.away_team} ${data.game.away_score} @ ${data.game.home_team} ${data.game.home_score}
+                        </div>
+                    `;
+                }
+
                 // Create box score tables for each team
-                Object.entries(data.teams).forEach(([teamName, players]) => {
+                Object.entries(data.teams).forEach(([teamName, teamData]) => {
                     const teamSection = document.createElement('div');
                     teamSection.className = 'team-section';
                     
@@ -270,54 +307,34 @@
                                 <th>BLK</th>
                                 <th>TO</th>
                                 <th>PF</th>
+                                <th>+/-</th>
                                 <th>PTS</th>
                             </tr>
                         </thead>
                     `;
 
-                    // Add player rows
                     const tbody = document.createElement('tbody');
-                    players.forEach(player => {
-                        tbody.innerHTML += `
-                            <tr>
-                                <td>${player.name}</td>
-                                <td>${player.minutes}</td>
-                                <td>${player.fg}</td>
-                                <td>${player.threept}</td>
-                                <td>${player.ft}</td>
-                                <td>${player.oreb}</td>
-                                <td>${player.dreb}</td>
-                                <td>${player.reb}</td>
-                                <td>${player.ast}</td>
-                                <td>${player.stl}</td>
-                                <td>${player.blk}</td>
-                                <td>${player.to}</td>
-                                <td>${player.pf}</td>
-                                <td>${player.pts}</td>
-                            </tr>
-                        `;
-                    });
 
-                    // Add team totals
-                    const totals = data.team_stats[teamName];
+                    // Add starters
+                    if (teamData.starters) {
+                        teamData.starters.forEach(player => {
+                            tbody.innerHTML += createPlayerRow(player);
+                        });
+                    }
+
+                    // Add separator row
                     tbody.innerHTML += `
-                        <tr class="team-totals">
-                            <td>Team Totals</td>
-                            <td>${totals.minutes}</td>
-                            <td>${totals.fg}</td>
-                            <td>${totals.threept}</td>
-                            <td>${totals.ft}</td>
-                            <td>${totals.oreb}</td>
-                            <td>${totals.dreb}</td>
-                            <td>${totals.reb}</td>
-                            <td>${totals.ast}</td>
-                            <td>${totals.stl}</td>
-                            <td>${totals.blk}</td>
-                            <td>${totals.to}</td>
-                            <td>${totals.pf}</td>
-                            <td>${totals.pts}</td>
+                        <tr>
+                            <td colspan="15" style="background-color: #eee; height: 2px; padding: 0;"></td>
                         </tr>
                     `;
+
+                    // Add bench players
+                    if (teamData.bench) {
+                        teamData.bench.forEach(player => {
+                            tbody.innerHTML += createPlayerRow(player);
+                        });
+                    }
 
                     table.appendChild(tbody);
                     teamSection.appendChild(teamTitle);
@@ -326,13 +343,48 @@
                 });
 
                 boxScoreDiv.classList.remove('hidden');
-                
-                // Scroll to box score
                 boxScoreDiv.scrollIntoView({ behavior: 'smooth' });
                 
             } catch (error) {
                 console.error('Error loading box score:', error);
+                const content = document.getElementById('boxScoreContent');
+                content.innerHTML = `
+                    <div class="error" style="color: red; padding: 20px; text-align: center;">
+                        Failed to load box score: ${error.message}
+                    </div>`;
+                document.getElementById('boxScore').classList.remove('hidden');
             }
+        }
+
+        function createPlayerRow(player) {
+            if (player.dnp_reason) {
+                return `
+                    <tr>
+                        <td>${player.player_name}</td>
+                        <td colspan="14">${player.dnp_reason}</td>
+                    </tr>
+                `;
+            }
+
+            return `
+                <tr>
+                    <td>${player.name}</td>
+                    <td>${player.minutes}</td>
+                    <td>${player.fg}</td>
+                    <td>${player.threept}</td>
+                    <td>${player.ft}</td>
+                    <td>${player.oreb}</td>
+                    <td>${player.dreb}</td>
+                    <td>${player.reb}</td>
+                    <td>${player.ast}</td>
+                    <td>${player.stl}</td>
+                    <td>${player.blk}</td>
+                    <td>${player.to}</td>
+                    <td>${player.pf}</td>
+                    <td>${player.plus_minus || '-'}</td>
+                    <td>${player.pts}</td>
+                </tr>
+            `;
         }
 
         function handleTeamChange(event) {

@@ -3,7 +3,7 @@ import requests
 from bs4 import BeautifulSoup, Comment
 import re
 import logging
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from datetime import datetime
 
 # Create router instance
@@ -390,32 +390,130 @@ def scrape_team_schedule(team_slug: str):
         "schedule": cleaned_schedule
     }
 
+def parse_meta_description(description: str) -> tuple:
+    """Parse game metadata from description."""
+    try:
+        if not description:
+            return None, None, None
+        # Example: "Box score for the Portland Trail Blazers vs. Los Angeles Lakers NBA game..."
+        teams = description.split('Box score for the ')[1].split(' NBA game')[0]
+        team1, team2 = teams.split(' vs. ')
+        return team1.strip(), team2.strip(), None
+    except:
+        return None, None, None
+
+def parse_meta_title(title: str) -> tuple:
+    """Parse game scores from title."""
+    try:
+        if not title or '-' not in title:
+            return None, None
+        # Example: "Trail Blazers 109-81 Lakers"
+        score_part = title.split('(')[0].strip()
+        score1, score2 = score_part.split('-')
+        team1_score = int(score1.split()[-1])
+        team2_score = int(score2.split()[0])
+        return team1_score, team2_score
+    except:
+        return None, None
+
 def scrape_game_box_score(game_id: str) -> dict:
     """Scrape box score data for a specific NBA game."""
     logger = logging.getLogger("uvicorn.error")
     
-    # First get the game page
-    game_url = f"https://www.espn.com/nba/game/_/gameId/{game_id}"
-    logger.info(f"Fetching game page from: {game_url}")
-    
-    response = requests.get(game_url, headers=headers)
-    if response.status_code != 200:
-        logger.error(f"Failed to fetch game page: {response.status_code}")
-        return {"error": "Failed to fetch game page"}
+    try:
+        box_score_url = f"https://www.espn.com/nba/boxscore/_/gameId/{game_id}"
+        logger.info(f"Fetching box score from: {box_score_url}")
+        
+        response = requests.get(box_score_url, headers=headers, timeout=10)
+        response.raise_for_status()
+        
+        soup = BeautifulSoup(response.text, "html.parser")
 
-    soup = BeautifulSoup(response.text, "html.parser")
-    
-    # Find team names from the game header
-    team_names = []
-    team_headers = soup.find_all("div", {"class": "GameHero_TeamInfo"})  # Fixed string literal
-    for team in team_headers:
-        name_element = team.find("div", {"class": "GameHero_TeamName"})
-        if name_element:
-            team_names.append(name_element.text.strip())
-    logger.info(f"Found team names: {team_names}")
+        # Initialize result structure
+        result = {
+            "game": {},
+            "teams": {},
+            "team_stats": {}
+        }
 
-    # Get box score URL
-    box_score_url = f"https://www.espn.com/nba/boxscore/_/gameId/{game_id}"
-    logger.info(f"Fetching box score from: {box_score_url}")
+        # Try to get game info from metadata first
+        meta_desc = soup.find("meta", attrs={"name": "description"})
+        meta_title = soup.find("meta", attrs={"name": "twitter:title"})
 
-    # ...rest of existing function...
+        if meta_desc and meta_title:
+            team1, team2, _ = parse_meta_description(meta_desc.get("content"))
+            score1, score2 = parse_meta_title(meta_title.get("content"))
+            
+            if all([team1, team2, score1, score2]):
+                result["game"] = {
+                    "home_team": team2,  # Second team is usually home team
+                    "away_team": team1,
+                    "home_score": score2,
+                    "away_score": score1
+                }
+                logger.info(f"Successfully parsed game info from metadata: {result['game']}")
+
+        # Find tables with the correct classes
+        box_score_tables = soup.find_all("table", class_=lambda x: x and "Table" in x)
+        
+        for table in box_score_tables:
+            team_name = table.find_previous("div", class_=lambda x: x and "TeamName" in x)
+            if not team_name:
+                continue
+
+            team_name = team_name.text.strip()
+            starters = []
+            bench = []
+            
+            # Find all player rows
+            rows = table.find_all("tr", class_=lambda x: x and "Table__TR" in x)
+            
+            for row in rows:
+                # Skip header rows and empty rows
+                if not row.get('data-idx'):
+                    continue
+
+                cells = row.find_all("td", class_="Table__TD")
+                if len(cells) < 14:  # Need minimum number of stat columns
+                    continue
+
+                # Parse player stats
+                player_stats = {
+                    "name": cells[0].text.strip(),
+                    "minutes": cells[1].text.strip(),
+                    "fg": cells[2].text.strip(),
+                    "threept": cells[3].text.strip(),
+                    "ft": cells[4].text.strip(),
+                    "oreb": cells[5].text.strip(),
+                    "dreb": cells[6].text.strip(),
+                    "reb": cells[7].text.strip(),
+                    "ast": cells[8].text.strip(),
+                    "stl": cells[9].text.strip(),
+                    "blk": cells[10].text.strip(),
+                    "to": cells[11].text.strip(),
+                    "pf": cells[12].text.strip(),
+                    "plus_minus": cells[13].text.strip(),
+                    "pts": cells[14].text.strip() if len(cells) > 14 else "0"
+                }
+
+                # Check if player is starter or bench
+                if int(row.get('data-idx', 0)) <= 5:
+                    starters.append(player_stats)
+                else:
+                    bench.append(player_stats)
+
+            # Add team data to result
+            if starters or bench:
+                result["teams"][team_name] = {
+                    "starters": starters,
+                    "bench": bench
+                }
+
+        if not result["teams"]:
+            raise ValueError("No valid player data found")
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Error scraping box score: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
