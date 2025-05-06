@@ -1,12 +1,13 @@
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, Query, HTTPException
-from app.scraper import test_scrape, scrape_season_stats, scrape_team_schedule, router, scrape_career_stats_totals, scrape_basic_team_stats, get_play_by_play, get_nba_play_by_play
+from app.scraper import test_scrape, scrape_season_stats, scrape_team_schedule, router, scrape_career_stats_totals, scrape_basic_team_stats, scrape_game_box_score, get_play_by_play, get_nba_play_by_play, nba_live_box_score, ncaa_live_box_score
 from app.schema import PlayerStats, TeamStats
 from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.encoders import jsonable_encoder
 import json
+import pandas as pd
 
 app = FastAPI()
 
@@ -87,6 +88,11 @@ def get_team_season_stats(name: str, year: str, pretty: bool = Query(False)):
 def get_team_schedule(team: str = Query("lal", description="NBA team slug, e.g., 'lal' for Lakers")):
     return scrape_team_schedule(team)
 
+@app.get("/games/{game_id}/box-score")
+def get_game_box_score(game_id: str):
+    box_score = scrape_game_box_score(game_id)
+    return JSONResponse(content=box_score)
+
 #@app.get("/playbyplay/")
 #def get_game_play_by_play(gameId: str = Query(..., description="ESPN game ID, e.g., '401706868'")):
 #    return get_play_by_play(gameId)
@@ -115,6 +121,15 @@ def get_nba_play_by_play_endpoint(
         return Response(content=pretty_json, media_type="application/json")
 
     return data
+
+@app.get("/games/{game_id}/ncaa-box-score")
+def get_ncaa_game_box_score(game_id: str):
+    return JSONResponse(content=ncaa_live_box_score(game_id))
+
+@app.get("/games/{game_id}/nba-box-score")
+def get_nba_game_box_score(game_id: str):
+    return JSONResponse(content=nba_live_box_score(game_id))
+
 
 # Include the router
 app.include_router(router)
