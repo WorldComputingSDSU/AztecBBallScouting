@@ -306,9 +306,32 @@ def scrape_basic_team_stats(team: str, season: str) -> dict:
 def per_game_by_season(player: str, season: str) -> dict:
     """Scrape stats for a given NCAA player and a specific season (e.g., '2023' for 2022–23)."""
     logger = logging.getLogger("uvicorn.error")
+    logger = logging.getLogger("uvicorn.error")
+    player_slug = format_player_name(player)
+    user_agents = [
+        # Chrome on Windows
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        # Firefox on Windows
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:119.0) Gecko/20100101 Firefox/119.0",
+        # Chrome on Mac
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        # Safari on Mac
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+        # Edge on Windows
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0",
+    ]
+
+    headers = {
+        "User-Agent": random.choice(user_agents),
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept": "text/html.application/xhtml+xml",
+        "Referer": "https://www.sports-reference.com/",
+        "Connection": "keep-alive"
+    }
+
     player_slug = format_player_name(player)
     url = f"https://www.sports-reference.com/cbb/players/{player_slug}.html"
-    response = requests.get(url)
+    response = requests.get(url, headers = headers)
 
     if response.status_code != 200:
         raise ValueError(f"Player not found or URL failed: {url}")

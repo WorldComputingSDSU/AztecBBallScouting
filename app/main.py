@@ -57,7 +57,7 @@ def get_player_stats(name: str):
     print(raw_stats)
     return PlayerStats(**raw_stats)
 
-@app.get("/players/{name}/test")
+@app.get("/players/{name}/season/{season}")
 def get_per_game_by_season(name: str, year: str):
     raw_stats = per_game_by_season(name, year)
     return PlayerStats(**raw_stats)
