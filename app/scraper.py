@@ -7,7 +7,7 @@ import json
 from fastapi import APIRouter, HTTPException
 from datetime import datetime
 import time
-
+import random
 router = APIRouter()
 
 # Define the router endpoint
@@ -36,11 +36,22 @@ def format_player_name(name):
     parts = name.lower().split()
     return '-'.join(parts) + "-1"
 
+def clean_name(name):
+    name = name.lower().strip()
+    name = re.sub(r"[’',\.]", "", name)  # Remove apostrophes, commas, and periods
+    parts = name.split()
+
+    # Only merge jr and sr with the last name
+    if len(parts) >= 2 and parts[-1] in {"jr", "sr"}:
+        parts[-2] = parts[-2] + parts[-1]
+        parts = parts[:-1]
+
+    return "-".join(parts)
 
 def scrape_season_stats(player: str, season: str) -> dict:
     """Scrape stats for a given NCAA player and a specific season (e.g., '2023' for 2022–23)."""
     logger = logging.getLogger("uvicorn.error")
-    player_slug = format_player_name(player)
+    player_slug = clean_name(player)
     url = f"https://www.sports-reference.com/cbb/players/{player_slug}.html"
     response = requests.get(url)
 
@@ -126,7 +137,29 @@ def scrape_season_stats(player: str, season: str) -> dict:
 def scrape_career_stats_totals(player: str) -> dict:
     player_slug = format_player_name(player)
     url = f"https://www.sports-reference.com/cbb/players/{player_slug}.html"
-    response = requests.get(url)
+
+    user_agents = [
+        # Chrome on Windows
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        # Firefox on Windows
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:119.0) Gecko/20100101 Firefox/119.0",
+        # Chrome on Mac
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        # Safari on Mac
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+        # Edge on Windows
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0",
+    ]
+
+    headers = {
+        "User-Agent": random.choice(user_agents),
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept": "text/html.application/xhtml+xml",
+        "Referer": "https://www.sports-reference.com/",
+        "Connection": "keep-alive"
+    }
+
+    response = requests.get(url, headers=headers)
     if response.status_code != 200:
         raise ValueError(f"Player not found: {url}")
 
@@ -268,6 +301,83 @@ def scrape_basic_team_stats(team: str, season: str) -> dict:
         if key and value and value != '':  # Avoid empty or dummy cells
             results[key] = value
 
+    return results
+
+def per_game_by_season(player: str, season: str) -> dict:
+    """Scrape stats for a given NCAA player and a specific season (e.g., '2023' for 2022–23)."""
+    logger = logging.getLogger("uvicorn.error")
+    player_slug = format_player_name(player)
+    url = f"https://www.sports-reference.com/cbb/players/{player_slug}.html"
+    response = requests.get(url)
+
+    if response.status_code != 200:
+        raise ValueError(f"Player not found or URL failed: {url}")
+
+    soup = BeautifulSoup(response.text, "html.parser")
+
+    # Try to find tables in both regular HTML and comments
+    per_game_table = soup.find("table", {"id": "players_per_game"})
+
+    # Check comments for hidden tables
+    comments = soup.find_all(string=lambda text: isinstance(text, Comment))
+    for comment in comments:
+        comment_soup = BeautifulSoup(comment, "html.parser")
+        if not per_game_table:
+            per_game_table = comment_soup.find("table", {"id": "players_per_game"})
+
+    # Look for season data in both tables
+    row_data = None
+    row = per_game_table.find("tr", {"id": f"players_per_game.{season}"})
+    if row:
+        row_data = row
+
+    if not row_data:
+        raise ValueError(f"No stats found for season {season}")
+
+    # Unified field mapping
+    key_map = {
+        "year_id": "season",
+        "team_name_abbr": "team",
+        "conf_abbr": "conference",
+        "class": "class_year",
+        "pos": "position",
+        "games": "games_played",
+        "games_started": "games_started",
+        "mp_per_g": "minutes_played",
+        "fg_per_g": "field_goals_made",
+        "fga_per_g": "field_goal_attempts",
+        "fg_pct": "fg_percentage",
+        "fg3_per_g": "three_pt_made",
+        "fg3a_per_g": "three_pt_attempts",
+        "fg3_pct": "three_pt_percentage",
+        "fg2_per_g": "two_pt_made",
+        "fg2a_per_g": "two_pt_attempts",
+        "fg2_pct": "two_pt_percentage",
+        "efg_pct": "effective_fg_percentage",
+        "ft_per_g": "free_throws_made",
+        "fta_per_g": "free_throw_attempts",
+        "ft_pct": "free_throw_percentage",
+        "orb_per_g": "offensive_rebounds",
+        "drb_per_g": "defensive_rebounds",
+        "trb_per_g": "total_rebounds",
+        "ast_per_g": "assists",
+        "stl_per_g": "steals",
+        "blk_per_g": "blocks",
+        "tov_per_g": "turnovers",
+        "pf_per_g": "personal_fouls",
+        "pts_per_g": "points",
+        "awards": "awards"
+    }
+
+    results = {}
+    cells = row_data.find_all(["td", "th"])
+    for cell in cells:
+        raw_key = cell.get("data-stat")
+        mapped_key = key_map.get(raw_key, raw_key)
+        val = cell.text.strip()
+        results[mapped_key] = val if val else None
+
+    logger.info(f"Scraped {season} stats for {player}: {results}")
     return results
 
 def test_scrape(player):

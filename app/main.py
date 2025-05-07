@@ -1,6 +1,6 @@
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, Query, HTTPException
-from app.scraper import test_scrape, scrape_season_stats, scrape_team_schedule, router, scrape_career_stats_totals, scrape_basic_team_stats, scrape_game_box_score, get_play_by_play, get_nba_play_by_play, nba_live_box_score, ncaa_live_box_score
+from app.scraper import test_scrape, scrape_season_stats, scrape_team_schedule, router, scrape_career_stats_totals, scrape_basic_team_stats, scrape_game_box_score, get_play_by_play, get_nba_play_by_play, nba_live_box_score, ncaa_live_box_score, per_game_by_season
 from app.schema import PlayerStats, TeamStats
 from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.encoders import jsonable_encoder
 import json
 import pandas as pd
+import time
 
 app = FastAPI()
 
@@ -56,22 +57,24 @@ def get_player_stats(name: str):
     print(raw_stats)
     return PlayerStats(**raw_stats)
 
+@app.get("/players/{name}/test")
+def get_per_game_by_season(name: str, year: str):
+    raw_stats = per_game_by_season(name, year)
+    return PlayerStats(**raw_stats)
+
 @app.get("/players/{name}/season/{year}")
 def get_season_stats(name: str, year: str):
     raw_stats = scrape_season_stats(name, year)
     return PlayerStats(**raw_stats)
 
 @app.get("/players/{name}/career_totals")
-def get_career_totals(name: str, pretty: bool = Query(False)):
-    raw_stats = scrape_career_stats_totals(name)
-    filtered_stats = {k: v for k, v in raw_stats.items() if v is not None}
-
-    if pretty:
-        import json
-        pretty_json = json.dumps(filtered_stats, indent=4)
-        return Response(content=pretty_json, media_type="application/json")
-
-    return filtered_stats
+def get_career_totals(name: str):
+    try:
+        stats = scrape_career_stats_totals(name)
+        return stats
+    except Exception as e:
+        print(f"❌ Failed to scrape {name}: {e}")
+        raise HTTPException(status_code=500, detail=f"Scraping error for {name}")
 
 @app.get("/teams/{name}/season/{year}")
 def get_team_season_stats(name: str, year: str, pretty: bool = Query(False)):
