@@ -846,8 +846,11 @@ def get_nba_play_by_play(game_id: str):
     return play_by_play
 
 
+import requests
+
+
 def ncaa_live_box_score(game_id: str) -> dict:
-    """Return structured box score data for an NBA game using ESPN's API."""
+    """Return structured box score data for an NCAA game using ESPN's API."""
     url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/summary?event={game_id}"
     response = requests.get(url)
     response.raise_for_status()
@@ -858,7 +861,7 @@ def ncaa_live_box_score(game_id: str) -> dict:
         "teams": {}
     }
 
-    # Get game info
+    # Game info
     comp = data.get("header", {}).get("competitions", [{}])[0]
     competitors = comp.get("competitors", [])
     if len(competitors) == 2:
@@ -868,10 +871,11 @@ def ncaa_live_box_score(game_id: str) -> dict:
             "home_team": home["team"]["displayName"],
             "away_team": away["team"]["displayName"],
             "home_score": int(home["score"]),
-            "away_score": int(away["score"])
+            "away_score": int(away["score"]),
+            "game_id": game_id
         }
 
-    # Define stat header row
+    # Stat header row
     stat_header = {
         "name": "MIN",
         "minutes": "FG",
@@ -890,21 +894,25 @@ def ncaa_live_box_score(game_id: str) -> dict:
         "pts": "0"
     }
 
-    # Process player stats
+    # Players section
     for team_data in data.get("boxscore", {}).get("players", []):
         team_name = team_data["team"]["displayName"]
         starters = [stat_header.copy()]
         bench = [stat_header.copy()]
+        starter_count = 0
 
         for stat_group in team_data.get("statistics", []):
-            group_name = stat_group.get("name", "").lower()
-            section = starters if group_name == "starters" else bench
-
             for athlete in stat_group.get("athletes", []):
                 player = athlete.get("athlete", {})
                 stats = athlete.get("stats", [])
                 did_not_play = athlete.get("didNotPlay", False)
                 reason = athlete.get("reason")
+                is_starter = athlete.get("starter", False)
+
+                # Assign to starters (max 5) or bench
+                section = starters if is_starter and starter_count < 5 else bench
+                if is_starter:
+                    starter_count += 1
 
                 if did_not_play:
                     section.append({
@@ -936,10 +944,10 @@ def ncaa_live_box_score(game_id: str) -> dict:
         result["teams"][team_name] = {
             "starters": starters,
             "bench": bench,
-            "team": []  # Will fill below
+            "team": []
         }
 
-    # Process team totals and percentages
+    # Team totals section
     for team in data.get("boxscore", {}).get("teams", []):
         team_name = team["team"]["displayName"]
         totals = {}
@@ -957,43 +965,33 @@ def ncaa_live_box_score(game_id: str) -> dict:
 
         totals_row = {
             "name": "",
-            "minutes": totals.get("FG", ""),
-            "fg": totals.get("3PT", ""),
-            "threept": totals.get("FT", ""),
-            "ft": totals.get("OREB", ""),
-            "oreb": totals.get("DREB", ""),
-            "dreb": totals.get("REB", ""),
-            "reb": totals.get("AST", ""),
-            "ast": totals.get("STL", ""),
-            "stl": totals.get("BLK", ""),
-            "blk": totals.get("TO", ""),
-            "to": totals.get("PF", ""),
-            "pf": "",
-            "plus_minus": totals.get("PTS", ""),
-            "pts": "0"
+            "minutes": "",  # total minutes not given
+            "fg": totals.get("FG", ""),
+            "threept": totals.get("3PT", ""),
+            "ft": totals.get("FT", ""),
+            "oreb": totals.get("OREB", ""),
+            "dreb": totals.get("DREB", ""),
+            "reb": totals.get("REB", ""),
+            "ast": totals.get("AST", ""),
+            "stl": totals.get("STL", ""),
+            "blk": totals.get("BLK", ""),
+            "to": totals.get("TO", ""),
+            "pf": totals.get("PF", ""),
+            "plus_minus": "",
+            "pts": totals.get("PTS", "0")
         }
 
         percents_row = {
             "name": "",
-            "minutes": percents.get("FG%", ""),
-            "fg": percents.get("3P%", ""),
-            "threept": percents.get("FT%", ""),
-            "ft": "",
-            "oreb": "",
-            "dreb": "",
-            "reb": "",
-            "ast": "",
-            "stl": "",
-            "blk": "",
-            "to": "",
-            "pf": "",
-            "plus_minus": "",
+            "fg": percents.get("FG%", ""),
+            "threept": percents.get("3P%", ""),
+            "ft": percents.get("FT%", ""),
             "pts": "0"
         }
 
         result["teams"][team_name]["team"] = [totals_row, percents_row]
 
-    # Clean empty strings from all stat rows
+    # Clean up empty fields
     for team in result["teams"].values():
         for group in ["starters", "bench", "team"]:
             cleaned = []
@@ -1003,6 +1001,8 @@ def ncaa_live_box_score(game_id: str) -> dict:
             team[group] = cleaned
 
     return result
+
+
 
 def nba_live_box_score(game_id: str) -> dict:
     """Return structured box score data for an NBA game using ESPN's API."""
@@ -1161,3 +1161,185 @@ def nba_live_box_score(game_id: str) -> dict:
             team[group] = cleaned
 
     return result
+
+def ncaa_schedule_from_api(team_id: int, team_name: str = ""):
+   url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/teams/{team_id}/schedule"
+   user_agents = [
+       # Chrome on Windows
+       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+       # Firefox on Windows
+       "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:119.0) Gecko/20100101 Firefox/119.0",
+       # Chrome on Mac
+       "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+       # Safari on Mac
+       "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+       # Edge on Windows
+       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0",
+   ]
+
+
+   headers = {
+       "User-Agent": random.choice(user_agents),
+       "Accept-Language": "en-US,en;q=0.9",
+       "Accept": "text/html.application/xhtml+xml",
+       "Referer": "https://www.sports-reference.com/",
+       "Connection": "keep-alive"
+   }
+   response = requests.get(url, headers=headers)
+
+
+   if response.status_code != 200:
+       return {"error": "API failed", "status_code": response.status_code}
+
+
+   data = response.json()
+   events = data.get("events", [])
+
+
+   schedule = []
+   for event in events:
+       game_id = event.get("id")
+       competitions = event.get("competitions", [{}])[0]
+       competitors = competitions.get("competitors", [])
+       date = event.get("date", "")[:10]
+       status = competitions.get("status", {}).get("type", {}).get("description", "")
+       venue = competitions.get("venue", {}).get("fullName", "")
+
+
+       # Find opponent
+       opponent = next(
+           (team["team"]["displayName"] for team in competitors if not team.get("home", False)),
+           "Unknown"
+       )
+
+
+       # Score (optional)
+       home_score = competitors[0].get("score")
+       away_score = competitors[1].get("score") if len(competitors) > 1 else None
+
+
+       schedule.append({
+           "date": date,
+           "opponent": opponent,
+           "status": status,
+           "venue": venue,
+           "home_score": home_score,
+           "away_score": away_score,
+           "game_id": game_id,
+           "game_url": f"https://www.espn.com/mens-college-basketball/game/_/gameId/{game_id}"
+       })
+
+
+   return {
+       "team_id": team_id,
+       "team": team_name,
+       "schedule": schedule
+   }
+
+
+def per_game_by_season(player: str, season: str) -> dict:
+   """Scrape stats for a given NCAA player and a specific season (e.g., '2023' for 2022–23)."""
+   logger = logging.getLogger("uvicorn.error")
+   player_slug = format_player_name(player)
+   user_agents = [
+       # Chrome on Windows
+       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+       # Firefox on Windows
+       "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:119.0) Gecko/20100101 Firefox/119.0",
+       # Chrome on Mac
+       "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+       # Safari on Mac
+       "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+       # Edge on Windows
+       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0",
+   ]
+
+
+   headers = {
+       "User-Agent": random.choice(user_agents),
+       "Accept-Language": "en-US,en;q=0.9",
+       "Accept": "text/html.application/xhtml+xml",
+       "Referer": "https://www.sports-reference.com/",
+       "Connection": "keep-alive"
+   }
+   url = f"https://www.sports-reference.com/cbb/players/{player_slug}.html"
+   response = requests.get(url, headers = headers)
+
+
+   if response.status_code != 200:
+       raise ValueError(f"Player not found or URL failed: {url}")
+
+
+   soup = BeautifulSoup(response.text, "html.parser")
+
+
+   # Try to find tables in both regular HTML and comments
+   per_game_table = soup.find("table", {"id": "players_per_game"})
+
+
+   # Check comments for hidden tables
+   comments = soup.find_all(string=lambda text: isinstance(text, Comment))
+   for comment in comments:
+       comment_soup = BeautifulSoup(comment, "html.parser")
+       if not per_game_table:
+           per_game_table = comment_soup.find("table", {"id": "players_per_game"})
+
+
+   # Look for season data in both tables
+   row_data = None
+   row = per_game_table.find("tr", {"id": f"players_per_game.{season}"})
+   if row:
+       row_data = row
+
+
+   if not row_data:
+       raise ValueError(f"No stats found for season {season}")
+
+
+   # Unified field mapping
+   key_map = {
+       "year_id": "season",
+       "team_name_abbr": "team",
+       "conf_abbr": "conference",
+       "class": "class_year",
+       "pos": "position",
+       "games": "games_played",
+       "games_started": "games_started",
+       "mp_per_g": "minutes_played",
+       "fg_per_g": "field_goals_made",
+       "fga_per_g": "field_goal_attempts",
+       "fg_pct": "fg_percentage",
+       "fg3_per_g": "three_pt_made",
+       "fg3a_per_g": "three_pt_attempts",
+       "fg3_pct": "three_pt_percentage",
+       "fg2_per_g": "two_pt_made",
+       "fg2a_per_g": "two_pt_attempts",
+       "fg2_pct": "two_pt_percentage",
+       "efg_pct": "effective_fg_percentage",
+       "ft_per_g": "free_throws_made",
+       "fta_per_g": "free_throw_attempts",
+       "ft_pct": "free_throw_percentage",
+       "orb_per_g": "offensive_rebounds",
+       "drb_per_g": "defensive_rebounds",
+       "trb_per_g": "total_rebounds",
+       "ast_per_g": "assists",
+       "stl_per_g": "steals",
+       "blk_per_g": "blocks",
+       "tov_per_g": "turnovers",
+       "pf_per_g": "personal_fouls",
+       "pts_per_g": "points",
+       "awards": "awards"
+   }
+
+
+   results = {}
+   cells = row_data.find_all(["td", "th"])
+   for cell in cells:
+       raw_key = cell.get("data-stat")
+       mapped_key = key_map.get(raw_key, raw_key)
+       val = cell.text.strip()
+       results[mapped_key] = val if val else None
+
+
+   logger.info(f"Scraped {season} stats for {player}: {results}")
+   return results

@@ -1,6 +1,6 @@
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, Query, HTTPException
-from app.scraper import test_scrape, scrape_season_stats, scrape_team_schedule, router, scrape_career_stats_totals, scrape_basic_team_stats, scrape_game_box_score, get_play_by_play, get_nba_play_by_play, nba_live_box_score, ncaa_live_box_score, per_game_by_season
+from app.scraper import test_scrape, scrape_season_stats, scrape_team_schedule, router, scrape_career_stats_totals, scrape_basic_team_stats, scrape_game_box_score, get_play_by_play, get_nba_play_by_play, nba_live_box_score, ncaa_schedule_from_api, ncaa_live_box_score, per_game_by_season
 from app.schema import PlayerStats, TeamStats
 from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
@@ -132,6 +132,18 @@ def get_ncaa_game_box_score(game_id: str):
 @app.get("/games/{game_id}/nba-box-score")
 def get_nba_game_box_score(game_id: str):
     return JSONResponse(content=nba_live_box_score(game_id))
+
+@app.get("/ncaa-team-schedule/")
+def get_ncaa_schedule_from_api(team_id: str):
+   """
+      Get NCAA schedule for a team by name or ID.
+      Example: /ncaa-team-schedule/?team=25 or ?team=Duke%20Blue%20Devils
+      """
+   try:
+       schedule = ncaa_schedule_from_api(team_id)
+       return schedule
+   except Exception as e:
+       raise HTTPException(status_code=500, detail=str(e))
 
 
 # Include the router
