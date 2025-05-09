@@ -890,7 +890,6 @@ def ncaa_live_box_score(game_id: str) -> dict:
         "blk": "TO",
         "to": "PF",
         "pf": "+/-",
-        "plus_minus": "PTS",
         "pts": "0"
     }
 
@@ -935,8 +934,7 @@ def ncaa_live_box_score(game_id: str) -> dict:
                     "blk": stats[9] if len(stats) > 9 else "",
                     "to": stats[10] if len(stats) > 10 else "",
                     "pf": stats[11] if len(stats) > 11 else "",
-                    "plus_minus": stats[12] if len(stats) > 12 else "",
-                    "pts": stats[13] if len(stats) > 13 else "0"
+                    "pts": stats[12] if len(stats) > 12 else ""
                 }
 
                 section.append(stat_line)
@@ -977,8 +975,7 @@ def ncaa_live_box_score(game_id: str) -> dict:
             "blk": totals.get("BLK", ""),
             "to": totals.get("TO", ""),
             "pf": totals.get("PF", ""),
-            "plus_minus": "",
-            "pts": totals.get("PTS", "0")
+            "pts": totals.get("PTS", "")
         }
 
         percents_row = {
