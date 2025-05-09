@@ -848,7 +848,6 @@ def get_nba_play_by_play(game_id: str):
 
 import requests
 
-
 def ncaa_live_box_score(game_id: str) -> dict:
     """Return structured box score data for an NCAA game using ESPN's API."""
     url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/summary?event={game_id}"
@@ -877,28 +876,16 @@ def ncaa_live_box_score(game_id: str) -> dict:
 
     # Stat header row
     stat_header = {
-        "name": "MIN",
-        "minutes": "FG",
-        "fg": "3PT",
-        "threept": "FT",
-        "ft": "OREB",
-        "oreb": "DREB",
-        "dreb": "REB",
-        "reb": "AST",
-        "ast": "STL",
-        "stl": "BLK",
-        "blk": "TO",
-        "to": "PF",
-        "pf": "+/-",
-        "pts": "0"
+        "name": "NAME", "minutes": "MIN", "fg": "FG", "threept": "3PT", "ft": "FT",
+        "oreb": "OREB", "dreb": "DREB", "reb": "REB", "ast": "AST",
+        "stl": "STL", "blk": "BLK", "to": "TO", "pf": "PF", "pts": "PTS"
     }
 
-    # Players section
+    # Player stats
     for team_data in data.get("boxscore", {}).get("players", []):
         team_name = team_data["team"]["displayName"]
         starters = [stat_header.copy()]
         bench = [stat_header.copy()]
-        starter_count = 0
 
         for stat_group in team_data.get("statistics", []):
             for athlete in stat_group.get("athletes", []):
@@ -908,10 +895,7 @@ def ncaa_live_box_score(game_id: str) -> dict:
                 reason = athlete.get("reason")
                 is_starter = athlete.get("starter", False)
 
-                # Assign to starters (max 5) or bench
-                section = starters if is_starter and starter_count < 5 else bench
-                if is_starter:
-                    starter_count += 1
+                section = starters if is_starter else bench
 
                 if did_not_play:
                     section.append({
@@ -945,60 +929,51 @@ def ncaa_live_box_score(game_id: str) -> dict:
             "team": []
         }
 
-    # Team totals section
+    # Team totals section — all fields aligned and filled
+    # Team totals section — full stat alignment
+    stat_keys = [
+        "fg", "threept", "ft", "oreb", "dreb", "reb",
+        "ast", "stl", "blk", "to", "pf"
+    ]  # intentionally exclude "pts"
+
+    label_map = {
+        "FG": "fg", "3PT": "threept", "FT": "ft",
+        "OR": "oreb", "DR": "dreb", "REB": "reb",
+        "AST": "ast", "STL": "stl", "BLK": "blk",
+        "TO": "to", "PF": "pf",
+        "FG%": "fg", "3P%": "threept", "FT%": "ft"
+        # "PTS" intentionally omitted
+    }
+
     for team in data.get("boxscore", {}).get("teams", []):
         team_name = team["team"]["displayName"]
-        totals = {}
-        percents = {}
+        totals_row = {"name": "TEAM"}
+        percents_row = {"name": "PCT"}
+
+        for key in stat_keys:
+            totals_row[key] = ""
+            percents_row[key] = ""
 
         for stat in team.get("statistics", []):
-            label = stat.get("label")
-            value = stat.get("displayValue")
-            if not label or not value:
+            label = stat.get("label", "").strip()
+            abbr = stat.get("abbreviation", "").strip()
+            value = stat.get("displayValue", "").strip()
+            if not value:
                 continue
-            if "%" in value:
-                percents[label] = value
+
+            mapped_key = label_map.get(label) or label_map.get(abbr)
+            if not mapped_key or mapped_key not in stat_keys:
+                continue
+
+            if "%" in label or "%" in abbr:
+                percents_row[mapped_key] = value + "%" if not value.endswith("%") else value
             else:
-                totals[label] = value
-
-        totals_row = {
-            "name": "",
-            "minutes": "",  # total minutes not given
-            "fg": totals.get("FG", ""),
-            "threept": totals.get("3PT", ""),
-            "ft": totals.get("FT", ""),
-            "oreb": totals.get("OREB", ""),
-            "dreb": totals.get("DREB", ""),
-            "reb": totals.get("REB", ""),
-            "ast": totals.get("AST", ""),
-            "stl": totals.get("STL", ""),
-            "blk": totals.get("BLK", ""),
-            "to": totals.get("TO", ""),
-            "pf": totals.get("PF", ""),
-            "pts": totals.get("PTS", "")
-        }
-
-        percents_row = {
-            "name": "",
-            "fg": percents.get("FG%", ""),
-            "threept": percents.get("3P%", ""),
-            "ft": percents.get("FT%", ""),
-            "pts": "0"
-        }
+                totals_row[mapped_key] = value
 
         result["teams"][team_name]["team"] = [totals_row, percents_row]
 
-    # Clean up empty fields
-    for team in result["teams"].values():
-        for group in ["starters", "bench", "team"]:
-            cleaned = []
-            for row in team.get(group, []):
-                cleaned_row = {k: v for k, v in row.items() if v != ""}
-                cleaned.append(cleaned_row)
-            team[group] = cleaned
 
     return result
-
 
 
 def nba_live_box_score(game_id: str) -> dict:
