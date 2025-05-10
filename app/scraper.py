@@ -7,6 +7,7 @@ import json
 from fastapi import APIRouter, HTTPException
 from datetime import datetime
 import time
+import pandas as pd
 import random
 router = APIRouter()
 
@@ -1134,79 +1135,110 @@ def nba_live_box_score(game_id: str) -> dict:
 
     return result
 
-def ncaa_schedule_from_api(team_id: int, team_name: str = ""):
-   url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/teams/{team_id}/schedule"
-   user_agents = [
-       # Chrome on Windows
-       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-       # Firefox on Windows
-       "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:119.0) Gecko/20100101 Firefox/119.0",
-       # Chrome on Mac
-       "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-       # Safari on Mac
-       "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
-       # Edge on Windows
-       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0",
-   ]
+
+import requests
+import random
+import time
+from bs4 import BeautifulSoup
+
+def get_box_score_info(game_id):
+    url = f"https://www.espn.com/mens-college-basketball/game/_/gameId/{game_id}"
+    user_agents = [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:119.0) Gecko/20100101 Firefox/119.0",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+    ]
+    headers = {"User-Agent": random.choice(user_agents)}
+    response = requests.get(url, headers=headers)
+
+    if response.status_code != 200:
+        print(f"Failed to fetch box score for game {game_id}")
+        return None
+
+    soup = BeautifulSoup(response.text, "html.parser")
+
+    teams = soup.select('span.short-name')
+    scores = soup.select('div.ScoreboardScoreCell__Value')
+
+    if len(teams) < 2 or len(scores) < 2:
+        print(f"Incomplete data for game {game_id}")
+        return None
+
+    return {
+        "team_1": teams[0].get_text(strip=True),
+        "team_2": teams[1].get_text(strip=True),
+        "score_1": scores[0].get_text(strip=True),
+        "score_2": scores[1].get_text(strip=True),
+    }
 
 
-   headers = {
-       "User-Agent": random.choice(user_agents),
-       "Accept-Language": "en-US,en;q=0.9",
-       "Accept": "text/html.application/xhtml+xml",
-       "Referer": "https://www.sports-reference.com/",
-       "Connection": "keep-alive"
-   }
-   response = requests.get(url, headers=headers)
+def ncaa_schedule_from_api(team_id: int):
+    url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/teams/{team_id}/schedule"
+    user_agents = [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:119.0) Gecko/20100101 Firefox/119.0",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0",
+    ]
+    headers = {
+        "User-Agent": random.choice(user_agents),
+        "Accept": "application/json",
+        "Accept-Language": "en-US,en;q=0.9"
+    }
 
+    response = requests.get(url, headers=headers)
+    if response.status_code != 200:
+        return {"error": "API failed", "status_code": response.status_code}
 
-   if response.status_code != 200:
-       return {"error": "API failed", "status_code": response.status_code}
+    data = response.json()
+    team_name = data.get("team", {}).get("displayName", "Unknown Team")
+    events = data.get("events", [])
 
+    schedule = []
+    for event in events:
+        game_id = event.get("id")
+        competitions = event.get("competitions", [{}])[0]
+        competitors = competitions.get("competitors", [])
+        date = event.get("date", "")[:10]
+        status = competitions.get("status", {}).get("type", {}).get("description", "")
+        venue = competitions.get("venue", {}).get("fullName", "")
 
-   data = response.json()
-   events = data.get("events", [])
+        # Determine opponent
+        opponent = "Unknown"
+        for comp in competitors:
+            team = comp.get("team", {})
+            if str(team.get("id")) != str(team_id):
+                opponent = team.get("displayName", "Unknown")
+                break
 
+        # Get scores (if available)
+        team_score = None
+        opponent_score = None
+        for comp in competitors:
+            if str(comp["team"].get("id")) == str(team_id):
+                team_score = comp.get("score")
+            else:
+                opponent_score = comp.get("score")
 
-   schedule = []
-   for event in events:
-       game_id = event.get("id")
-       competitions = event.get("competitions", [{}])[0]
-       competitors = competitions.get("competitors", [])
-       date = event.get("date", "")[:10]
-       status = competitions.get("status", {}).get("type", {}).get("description", "")
-       venue = competitions.get("venue", {}).get("fullName", "")
+        schedule.append({
+            "date": date,
+            "opponent": opponent,
+            "status": status,
+            "venue": venue,
+            "team_score": team_score,
+            "opponent_score": opponent_score,
+            "game_id": game_id,
+            "game_url": f"https://www.espn.com/mens-college-basketball/game/_/gameId/{game_id}"
+        })
 
+    return {
+        "team_id": team_id,
+        "team": team_name,
+        "schedule": schedule
+    }
 
-       # Find opponent
-       opponent = next(
-           (team["team"]["displayName"] for team in competitors if not team.get("home", False)),
-           "Unknown"
-       )
-
-
-       # Score (optional)
-       home_score = competitors[0].get("score")
-       away_score = competitors[1].get("score") if len(competitors) > 1 else None
-
-
-       schedule.append({
-           "date": date,
-           "opponent": opponent,
-           "status": status,
-           "venue": venue,
-           "home_score": home_score,
-           "away_score": away_score,
-           "game_id": game_id,
-           "game_url": f"https://www.espn.com/mens-college-basketball/game/_/gameId/{game_id}"
-       })
-
-
-   return {
-       "team_id": team_id,
-       "team": team_name,
-       "schedule": schedule
-   }
 
 
 def per_game_by_season(player: str, season: str) -> dict:
