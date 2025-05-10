@@ -99,7 +99,7 @@ def get_game_box_score(game_id: str):
 #@app.get("/playbyplay/")
 #def get_game_play_by_play(gameId: str = Query(..., description="ESPN game ID, e.g., '401706868'")):
 #    return get_play_by_play(gameId)
-@app.get("/playbyplay/")
+@app.get("/ncaaplaybyplay/")
 def get_play_by_play_endpoint(
         gameId: str = Query(..., description="ESPN game ID, e.g., '401706868'"),
         pretty: bool = Query(False, description="Return pretty-printed JSON")
@@ -129,11 +129,11 @@ def get_nba_play_by_play_endpoint(
 def get_ncaa_game_box_score(game_id: str):
     return JSONResponse(content=ncaa_live_box_score(game_id))
 
-@app.get("/ncaa-team-schedule/")
+@app.get("/ncaa-team-schedule/id/{team_id}")
 def get_ncaa_schedule_from_api(team_id: str):
    """
-      Get NCAA schedule for a team by name or ID.
-      Example: /ncaa-team-schedule/?team=25 or ?team=Duke%20Blue%20Devils
+      Get NCAA schedule for a team  or ID.
+      Example: /ncaa-team-schedule/id/25
       """
    try:
        schedule = ncaa_schedule_from_api(team_id)
